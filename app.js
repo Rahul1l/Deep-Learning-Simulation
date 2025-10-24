@@ -754,86 +754,139 @@ class DLPlayground {
     }
     
     initializeModel() {
+        // First check if dataset exists
+        if (!this.state.dataset) {
+            this.showMessage('Please generate a dataset first!', 'error');
+            console.error('No dataset found! Generate dataset before initializing model.');
+            return;
+        }
+        
         const hiddenUnits = parseInt(document.getElementById('hiddenUnits').value);
         const activation = document.getElementById('activation').value;
         const learningRate = parseFloat(document.getElementById('learningRate').value);
         const l2Lambda = parseFloat(document.getElementById('l2Lambda').value);
         const taskType = this.state.taskType || 'classification';
         
-        this.state.model = new MLP(2, hiddenUnits, activation, learningRate, l2Lambda, 42, taskType);
-        this.state.lossHistory = [];
-        this.state.accuracyHistory = [];
-        this.state.gradientHistory = [];
-        this.state.weightHistory = [];
-        this.state.currentEpoch = 0;
-        this.state.currentLoss = 0;
-        this.state.currentAccuracy = 0;
+        console.log('Initializing model with:', { hiddenUnits, activation, learningRate, l2Lambda, taskType });
         
-        // Calculate initial metrics if dataset exists
-        if (this.state.dataset) {
+        try {
+            this.state.model = new MLP(2, hiddenUnits, activation, learningRate, l2Lambda, 42, taskType);
+            console.log('Model created:', this.state.model);
+            
+            this.state.lossHistory = [];
+            this.state.accuracyHistory = [];
+            this.state.gradientHistory = [];
+            this.state.weightHistory = [];
+            this.state.currentEpoch = 0;
+            this.state.currentLoss = 0;
+            this.state.currentAccuracy = 0;
+            
+            // Calculate initial metrics
             const { X, y } = this.state.dataset;
             const forwardResult = this.state.model.forward(X);
             this.state.currentLoss = this.state.model.computeLoss(y, forwardResult.a2);
             this.state.currentAccuracy = this.state.model.computeAccuracy(y, forwardResult.a2);
+            
+            console.log('Initial metrics:', { 
+                loss: this.state.currentLoss, 
+                accuracy: this.state.currentAccuracy 
+            });
+            
+            // Update all UI elements
+            this.updateUI();
+            this.updateMathEquations();
+            this.updateMetrics();
+            this.plotNeuralNetwork();
+            this.updateWeightCalculations();
+            
+            // Update all plots to remove "not initialized" messages
+            this.plotLossCurve();
+            this.plotAccuracyCurve();
+            this.plotGradientDescent();
+            this.plotBackpropagation();
+            this.plotWeightEvolution();
+            this.plotDecisionBoundary();
+            
+            this.showMessage('Model initialized successfully!', 'success');
+            console.log('Model initialization complete!');
+        } catch (error) {
+            console.error('Error initializing model:', error);
+            this.showMessage('Error initializing model: ' + error.message, 'error');
         }
-        
-        this.updateUI();
-        this.updateMathEquations();
-        this.plotNeuralNetwork();
-        this.updateWeightCalculations();
-        this.showMessage('Model initialized successfully!', 'success');
     }
     
     startTraining() {
-        console.log('startTraining() called');
+        console.log('=== START TRAINING CALLED ===');
         console.log('Model exists:', !!this.state.model);
         console.log('Dataset exists:', !!this.state.dataset);
+        console.log('Current epoch:', this.state.currentEpoch);
+        console.log('Training active:', this.state.trainingActive);
         
-        if (!this.state.model || !this.state.dataset) {
-            console.log('Missing model or dataset!');
-            this.showMessage('Please initialize model and generate dataset first!', 'error');
+        if (!this.state.model) {
+            console.error('❌ No model found!');
+            this.showMessage('Please initialize model first!', 'error');
             return;
         }
         
-        console.log('Starting training...');
+        if (!this.state.dataset) {
+            console.error('❌ No dataset found!');
+            this.showMessage('Please generate dataset first!', 'error');
+            return;
+        }
+        
+        // Check if already training
+        if (this.state.trainingActive && this.state.trainingInterval) {
+            console.log('⚠️ Already training!');
+            this.showMessage('Training is already in progress!', 'error');
+            return;
+        }
+        
+        console.log('✅ Starting training...');
         this.state.trainingActive = true;
         
         // Clear any existing interval
         if (this.state.trainingInterval) {
+            console.log('Clearing existing training interval');
             clearInterval(this.state.trainingInterval);
+            this.state.trainingInterval = null;
         }
         
         // Get max epochs from UI
         const maxEpochs = parseInt(document.getElementById('maxEpochs').value) || 100;
+        console.log(`Training for max ${maxEpochs} epochs`);
         
-        // Start new training loop
+        // Train first epoch immediately
+        console.log('🚀 Training first epoch immediately...');
+        this.trainOneEpoch();
+        
+        // Start training loop
         this.state.trainingInterval = setInterval(() => {
             if (this.state.trainingActive) {
-                console.log(`Auto training epoch #${this.state.currentEpoch}...`);
+                console.log(`🔄 Training epoch ${this.state.currentEpoch + 1}...`);
                 this.trainOneEpoch();
                 
                 // Force immediate UI update
                 this.updateUI();
                 this.updateMetrics();
-                console.log('Updated UI and metrics after epoch', this.state.currentEpoch);
                 
                 // Stop after reaching max epochs
                 if (this.state.currentEpoch >= maxEpochs) {
-                    console.log(`Stopping after ${maxEpochs} epochs`);
+                    console.log(`✅ Training complete! Reached ${maxEpochs} epochs`);
                     this.state.trainingActive = false;
                     clearInterval(this.state.trainingInterval);
                     this.state.trainingInterval = null;
-                    this.showMessage(`Training completed! Reached ${maxEpochs} epochs.`, 'success');
+                    this.showMessage(`Training completed! Trained for ${maxEpochs} epochs.`, 'success');
                 }
             } else {
-                console.log('Training paused, stopping interval');
+                console.log('⏸️ Training paused');
                 clearInterval(this.state.trainingInterval);
                 this.state.trainingInterval = null;
             }
         }, 200); // Update every 200ms
         
         this.updateUI();
-        this.showMessage('Training started!', 'success');
+        this.showMessage('Training started! Watch the metrics update.', 'success');
+        console.log('=== TRAINING LOOP STARTED ===');
     }
     
     pauseTraining() {
@@ -848,11 +901,11 @@ class DLPlayground {
     
     trainOneEpoch() {
         if (!this.state.model || !this.state.dataset) {
-            console.log('No model or dataset!');
+            console.error('❌ trainOneEpoch: Missing model or dataset!');
             return;
         }
         
-        console.log('Training one epoch...');
+        console.log(`📊 Training epoch ${this.state.currentEpoch + 1}...`);
         const { X, y } = this.state.dataset;
         
         // Store weights before update for tracking
@@ -861,7 +914,6 @@ class DLPlayground {
         
         // Forward pass
         const forwardResult = this.state.model.forward(X);
-        console.log('Forward pass completed');
         
         // Backward pass
         const gradients = this.state.model.backward(X, y, forwardResult);
@@ -880,14 +932,12 @@ class DLPlayground {
         }
         gradientMagnitude = Math.sqrt(gradientMagnitude);
         
-        // Update weights
-        this.state.model.updateWeights(gradients);
-        console.log('Backward pass completed');
-        
-        // Calculate metrics using the forward pass results
+        // Calculate metrics BEFORE weight update (using current weights)
         const loss = this.state.model.computeLoss(y, forwardResult.a2);
         const accuracy = this.state.model.computeAccuracy(y, forwardResult.a2);
-        console.log(`Calculated loss: ${loss}, accuracy: ${accuracy}`);
+        
+        // Update weights
+        this.state.model.updateWeights(gradients);
         
         // Update state
         this.state.currentEpoch++;
@@ -904,7 +954,7 @@ class DLPlayground {
             W2_00: this.state.model.W2[0][0]
         });
         
-        console.log(`State updated - Epoch: ${this.state.currentEpoch}, Loss: ${this.state.currentLoss}, Accuracy: ${this.state.currentAccuracy}`);
+        console.log(`✅ Epoch ${this.state.currentEpoch} complete | Loss: ${loss.toFixed(4)} | Acc: ${(accuracy*100).toFixed(2)}% | ∇L: ${gradientMagnitude.toFixed(6)}`);
         
         // Update UI and plots
         this.updateUI();
@@ -929,9 +979,6 @@ class DLPlayground {
         
         // Check achievements
         this.checkAchievements();
-        
-        // Debug logging
-        console.log(`Epoch ${this.state.currentEpoch}: Loss=${loss.toFixed(4)}, Accuracy=${(accuracy*100).toFixed(2)}%`);
     }
     
     resetWeights() {
