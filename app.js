@@ -2124,59 +2124,88 @@ class DLPlayground {
     }
     
     updateWeightCalculations() {
-        if (!this.state.model) {
-            // Show not initialized message
-            document.getElementById('taskType').textContent = 'Not initialized';
-            document.getElementById('targetInfo').textContent = 'Initialize model first';
-            document.getElementById('activationFunction').textContent = 'Not initialized';
-            document.getElementById('learningRate').textContent = 'Not initialized';
-            document.getElementById('w1Matrix').textContent = 'Not initialized - Initialize model to see weights';
-            document.getElementById('w2Matrix').textContent = 'Not initialized - Initialize model to see weights';
-            document.getElementById('biasVectors').textContent = 'Not initialized - Initialize model to see biases';
-            return;
-        }
-        
-        // Use actual model data
-        const taskType = this.state.model.taskType === 'classification' ? 
-            'BINARY CLASSIFICATION' : 'REGRESSION';
-        const targetInfo = this.state.model.taskType === 'classification' ? 
-            '0 or 1 (Binary Classification)' : 'Continuous values (Regression)';
-        const activation = this.state.model.activation.toUpperCase();
-        const learningRate = this.state.model.learningRate.toFixed(4);
-        
-        document.getElementById('taskType').textContent = taskType;
-        document.getElementById('targetInfo').textContent = targetInfo;
-        document.getElementById('activationFunction').textContent = activation;
-        document.getElementById('learningRate').textContent = learningRate;
-        
-        // Use actual weights from the model
-        const W1 = this.state.model.W1;
-        const W2 = this.state.model.W2;
-        const b1 = this.state.model.b1[0]; // First row contains the bias values
-        const b2 = this.state.model.b2[0];
-        
-        // Format weight matrices
-        const formatMatrix = (matrix, name) => {
-            let result = `${name}:\n`;
-            for (let i = 0; i < matrix.length; i++) {
-                result += `[${matrix[i].map(val => val.toFixed(4)).join(', ')}]\n`;
+        try {
+            if (!this.state.model) {
+                // Show not initialized message
+                document.getElementById('taskType').textContent = 'Not initialized';
+                document.getElementById('targetInfo').textContent = 'Initialize model first';
+                document.getElementById('activationFunction').textContent = 'Not initialized';
+                document.getElementById('learningRate').textContent = 'Not initialized';
+                document.getElementById('w1Matrix').textContent = 'Not initialized - Initialize model to see weights';
+                document.getElementById('w2Matrix').textContent = 'Not initialized - Initialize model to see weights';
+                document.getElementById('biasVectors').textContent = 'Not initialized - Initialize model to see biases';
+                return;
             }
-            return result;
-        };
+            
+            // Use actual model data
+            const taskType = this.state.model.taskType === 'classification' ? 
+                'BINARY CLASSIFICATION' : 'REGRESSION';
+            const targetInfo = this.state.model.taskType === 'classification' ? 
+                '0 or 1 (Binary Classification)' : 'Continuous values (Regression)';
+            const activation = this.state.model.activation.toUpperCase();
+            const learningRate = this.state.model.learningRate.toFixed(4);
+            
+            document.getElementById('taskType').textContent = taskType;
+            document.getElementById('targetInfo').textContent = targetInfo;
+            document.getElementById('activationFunction').textContent = activation;
+            document.getElementById('learningRate').textContent = learningRate;
+            
+            // Use actual weights from the model
+            const W1 = this.state.model.W1;
+            const W2 = this.state.model.W2;
+            const b1 = this.state.model.b1;
+            const b2 = this.state.model.b2;
+            
+            console.log('Weight shapes:', { 
+                W1: W1.length + 'x' + W1[0].length,
+                W2: W2.length + 'x' + W2[0].length,
+                b1: b1.length + 'x' + b1[0].length,
+                b2: b2.length + 'x' + b2[0].length
+            });
+            
+            // Format weight matrices
+            const formatMatrix = (matrix, name) => {
+                let result = `${name}:\n`;
+                for (let i = 0; i < matrix.length; i++) {
+                    result += `[${matrix[i].map(val => val.toFixed(4)).join(', ')}]\n`;
+                }
+                return result;
+            };
+            
+            // Format bias vectors (b1 and b2 are 1xN and 1x1 matrices)
+            const formatBias = (b1Matrix, b2Matrix) => {
+                let result = 'b1 (Hidden layer bias):\n';
+                // b1 is a 1xN matrix, get the first row
+                if (b1Matrix && b1Matrix[0]) {
+                    result += `[${b1Matrix[0].map(val => val.toFixed(4)).join(', ')}]\n\n`;
+                } else {
+                    result += '[Error: b1 not initialized]\n\n';
+                }
+                
+                result += 'b2 (Output layer bias):\n';
+                // b2 is a 1x1 matrix, get the first row
+                if (b2Matrix && b2Matrix[0]) {
+                    result += `[${b2Matrix[0].map(val => val.toFixed(4)).join(', ')}]`;
+                } else {
+                    result += '[Error: b2 not initialized]';
+                }
+                return result;
+            };
+            
+            // Update weight displays with actual weights
+            document.getElementById('w1Matrix').textContent = formatMatrix(W1, 'W1 (Input → Hidden)');
+            document.getElementById('w2Matrix').textContent = formatMatrix(W2, 'W2 (Hidden → Output)');
+            document.getElementById('biasVectors').textContent = formatBias(b1, b2);
         
-        // Format bias vectors
-        const formatBias = (b1, b2) => {
-            let result = 'b1 (Hidden layer bias):\n';
-            result += `[${b1.map(val => val.toFixed(4)).join(', ')}]\n\n`;
-            result += 'b2 (Output layer bias):\n';
-            result += `[${b2.map(val => val.toFixed(4)).join(', ')}]`;
-            return result;
-        };
-        
-        // Update weight displays with actual weights
-        document.getElementById('w1Matrix').textContent = formatMatrix(W1, 'W1 (Input → Hidden)');
-        document.getElementById('w2Matrix').textContent = formatMatrix(W2, 'W2 (Hidden → Output)');
-        document.getElementById('biasVectors').textContent = formatBias(b1, b2);
+        } catch (error) {
+            console.error('Error in updateWeightCalculations:', error);
+            console.error('Model state:', this.state.model);
+            document.getElementById('taskType').textContent = 'Error loading';
+            document.getElementById('targetInfo').textContent = 'Error: ' + error.message;
+            document.getElementById('w1Matrix').textContent = 'Error displaying weights: ' + error.message;
+            document.getElementById('w2Matrix').textContent = 'Error displaying weights: ' + error.message;
+            document.getElementById('biasVectors').textContent = 'Error displaying biases: ' + error.message;
+        }
     }
     
     plotBackpropagation() {
