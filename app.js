@@ -438,6 +438,8 @@ class AppState {
         this.currentAccuracy = 0;
         this.lossHistory = [];
         this.accuracyHistory = [];
+        this.gradientHistory = [];  // Track gradient magnitudes
+        this.weightHistory = [];     // Track weight evolution
         this.achievements = [];
         this.trainingInterval = null;
         this.datasetName = null;
@@ -734,6 +736,8 @@ class DLPlayground {
         this.state.datasetName = datasetType;
         this.state.lossHistory = [];
         this.state.accuracyHistory = [];
+        this.state.gradientHistory = [];
+        this.state.weightHistory = [];
         this.state.currentEpoch = 0;
         this.state.currentLoss = 0;
         this.state.currentAccuracy = 0;
@@ -759,6 +763,8 @@ class DLPlayground {
         this.state.model = new MLP(2, hiddenUnits, activation, learningRate, l2Lambda, 42, taskType);
         this.state.lossHistory = [];
         this.state.accuracyHistory = [];
+        this.state.gradientHistory = [];
+        this.state.weightHistory = [];
         this.state.currentEpoch = 0;
         this.state.currentLoss = 0;
         this.state.currentAccuracy = 0;
@@ -772,6 +778,7 @@ class DLPlayground {
         }
         
         this.updateUI();
+        this.updateMathEquations();
         this.plotNeuralNetwork();
         this.updateWeightCalculations();
         this.showMessage('Model initialized successfully!', 'success');
@@ -796,33 +803,34 @@ class DLPlayground {
             clearInterval(this.state.trainingInterval);
         }
         
+        // Get max epochs from UI
+        const maxEpochs = parseInt(document.getElementById('maxEpochs').value) || 100;
+        
         // Start new training loop
-        let trainingCount = 0;
         this.state.trainingInterval = setInterval(() => {
             if (this.state.trainingActive) {
-                trainingCount++;
-                console.log(`Auto training epoch #${trainingCount}...`);
+                console.log(`Auto training epoch #${this.state.currentEpoch}...`);
                 this.trainOneEpoch();
                 
                 // Force immediate UI update
                 this.updateUI();
                 this.updateMetrics();
-                console.log('Updated UI and metrics after epoch', trainingCount);
+                console.log('Updated UI and metrics after epoch', this.state.currentEpoch);
                 
-                // Stop after 20 epochs for testing
-                if (trainingCount >= 20) {
-                    console.log('Stopping after 20 epochs');
+                // Stop after reaching max epochs
+                if (this.state.currentEpoch >= maxEpochs) {
+                    console.log(`Stopping after ${maxEpochs} epochs`);
                     this.state.trainingActive = false;
                     clearInterval(this.state.trainingInterval);
                     this.state.trainingInterval = null;
-                    this.showMessage('Training completed!', 'success');
+                    this.showMessage(`Training completed! Reached ${maxEpochs} epochs.`, 'success');
                 }
             } else {
                 console.log('Training paused, stopping interval');
                 clearInterval(this.state.trainingInterval);
                 this.state.trainingInterval = null;
             }
-        }, 200); // Faster updates // Even slower for better visibility
+        }, 200); // Update every 200ms
         
         this.updateUI();
         this.showMessage('Training started!', 'success');
@@ -847,12 +855,32 @@ class DLPlayground {
         console.log('Training one epoch...');
         const { X, y } = this.state.dataset;
         
+        // Store weights before update for tracking
+        const W1_old = JSON.parse(JSON.stringify(this.state.model.W1));
+        const W2_old = JSON.parse(JSON.stringify(this.state.model.W2));
+        
         // Forward pass
         const forwardResult = this.state.model.forward(X);
         console.log('Forward pass completed');
         
         // Backward pass
         const gradients = this.state.model.backward(X, y, forwardResult);
+        
+        // Calculate gradient magnitude (L2 norm)
+        let gradientMagnitude = 0;
+        for (let i = 0; i < gradients.dL_dW1.length; i++) {
+            for (let j = 0; j < gradients.dL_dW1[i].length; j++) {
+                gradientMagnitude += gradients.dL_dW1[i][j] ** 2;
+            }
+        }
+        for (let i = 0; i < gradients.dL_dW2.length; i++) {
+            for (let j = 0; j < gradients.dL_dW2[i].length; j++) {
+                gradientMagnitude += gradients.dL_dW2[i][j] ** 2;
+            }
+        }
+        gradientMagnitude = Math.sqrt(gradientMagnitude);
+        
+        // Update weights
         this.state.model.updateWeights(gradients);
         console.log('Backward pass completed');
         
@@ -867,6 +895,14 @@ class DLPlayground {
         this.state.currentAccuracy = accuracy;
         this.state.lossHistory.push(loss);
         this.state.accuracyHistory.push(accuracy);
+        this.state.gradientHistory.push(gradientMagnitude);
+        
+        // Track weight evolution (sample a few weights to avoid memory issues)
+        this.state.weightHistory.push({
+            W1_00: this.state.model.W1[0][0],
+            W1_01: this.state.model.W1[0][1] || 0,
+            W2_00: this.state.model.W2[0][0]
+        });
         
         console.log(`State updated - Epoch: ${this.state.currentEpoch}, Loss: ${this.state.currentLoss}, Accuracy: ${this.state.currentAccuracy}`);
         
@@ -875,6 +911,21 @@ class DLPlayground {
         this.plotDecisionBoundary();
         this.plotLossCurve();
         this.plotAccuracyCurve();
+        this.plotGradientDescent();
+        this.plotBackpropagation();
+        this.plotWeightEvolution();
+        this.plotNeuralNetwork();
+        this.updateWeightCalculations();
+        
+        // Update 3D learning rate plot after 5 epochs
+        if (this.state.currentEpoch >= 5) {
+            this.plotLearningRate3D();
+        }
+        
+        // Update loss landscape periodically (every 5 epochs to save performance)
+        if (this.state.currentEpoch % 5 === 0) {
+            this.plotLossLandscape();
+        }
         
         // Check achievements
         this.checkAchievements();
@@ -893,15 +944,22 @@ class DLPlayground {
         const activation = document.getElementById('activation').value;
         const learningRate = parseFloat(document.getElementById('learningRate').value);
         const l2Lambda = parseFloat(document.getElementById('l2Lambda').value);
+        const taskType = this.state.taskType || 'classification';
         
-        this.state.model = new MLP(2, hiddenUnits, activation, learningRate, l2Lambda);
+        this.state.model = new MLP(2, hiddenUnits, activation, learningRate, l2Lambda, 42, taskType);
         this.state.lossHistory = [];
         this.state.accuracyHistory = [];
+        this.state.gradientHistory = [];
+        this.state.weightHistory = [];
         this.state.currentEpoch = 0;
         this.state.currentLoss = 0;
         this.state.currentAccuracy = 0;
         
         this.updateUI();
+        this.plotNeuralNetwork();
+        this.updateWeightCalculations();
+        this.plotLossCurve();
+        this.plotAccuracyCurve();
         this.showMessage('Weights reset!', 'success');
     }
     
@@ -1350,9 +1408,44 @@ class DLPlayground {
     plotLossCurve() {
         const hasHistory = this.state.lossHistory.length > 0;
         
+        if (!hasHistory) {
+            const layout = {
+                title: 'Training Loss',
+                xaxis: { 
+                    title: 'Epoch',
+                    showgrid: true,
+                    gridcolor: '#475569',
+                    color: '#f8fafc'
+                },
+                yaxis: { 
+                    title: 'Loss',
+                    showgrid: true,
+                    gridcolor: '#475569',
+                    color: '#f8fafc'
+                },
+                plot_bgcolor: '#1e293b',
+                paper_bgcolor: '#1e293b',
+                font: { color: '#f8fafc' },
+                annotations: [{
+                    text: 'Start training to see loss curve!',
+                    x: 0.5, y: 0.5,
+                    xref: 'paper', yref: 'paper',
+                    showarrow: false,
+                    font: { size: 16, color: '#94a3b8' }
+                }]
+            };
+            
+            try {
+                Plotly.newPlot('lossCurve', [], layout, {responsive: true});
+            } catch (error) {
+                console.error('Plotly error:', error);
+            }
+            return;
+        }
+        
         const trace = {
-            x: hasHistory ? Array.from({length: this.state.lossHistory.length}, (_, i) => i + 1) : [0],
-            y: hasHistory ? this.state.lossHistory : [0],
+            x: Array.from({length: this.state.lossHistory.length}, (_, i) => i + 1),
+            y: this.state.lossHistory,
             type: 'scatter',
             mode: 'lines+markers',
             name: 'Loss',
@@ -1361,7 +1454,7 @@ class DLPlayground {
         };
         
         const layout = {
-            title: `Training Loss ${hasHistory ? `(Current: ${this.state.currentLoss.toFixed(4)})` : ''}`,
+            title: `Training Loss (Current: ${this.state.currentLoss.toFixed(4)})`,
             xaxis: { 
                 title: 'Epoch',
                 showgrid: true,
@@ -1379,16 +1472,6 @@ class DLPlayground {
             font: { color: '#f8fafc' }
         };
         
-        if (!hasHistory) {
-            layout.annotations = [{
-                text: 'Start training to see loss curve!',
-                x: 0.5, y: 0.5,
-                xref: 'paper', yref: 'paper',
-                showarrow: false,
-                font: { size: 16, color: '#94a3b8' }
-            }];
-        }
-        
         try {
             Plotly.newPlot('lossCurve', [trace], layout, {responsive: true});
         } catch (error) {
@@ -1400,9 +1483,44 @@ class DLPlayground {
         const hasHistory = this.state.accuracyHistory.length > 0;
         const isClassification = this.state.taskType === 'classification';
         
+        if (!hasHistory) {
+            const layout = {
+                title: isClassification ? 'Training Accuracy' : 'R² Score',
+                xaxis: { 
+                    title: 'Epoch',
+                    showgrid: true,
+                    gridcolor: '#475569',
+                    color: '#f8fafc'
+                },
+                yaxis: { 
+                    title: isClassification ? 'Accuracy (%)' : 'R² Score (%)',
+                    showgrid: true,
+                    gridcolor: '#475569',
+                    color: '#f8fafc'
+                },
+                plot_bgcolor: '#1e293b',
+                paper_bgcolor: '#1e293b',
+                font: { color: '#f8fafc' },
+                annotations: [{
+                    text: 'Start training to see accuracy curve!',
+                    x: 0.5, y: 0.5,
+                    xref: 'paper', yref: 'paper',
+                    showarrow: false,
+                    font: { size: 16, color: '#94a3b8' }
+                }]
+            };
+            
+            try {
+                Plotly.newPlot('accuracyCurve', [], layout, {responsive: true});
+            } catch (error) {
+                console.error('Plotly error:', error);
+            }
+            return;
+        }
+        
         const trace = {
-            x: hasHistory ? Array.from({length: this.state.accuracyHistory.length}, (_, i) => i + 1) : [0],
-            y: hasHistory ? this.state.accuracyHistory.map(acc => acc * 100) : [0],
+            x: Array.from({length: this.state.accuracyHistory.length}, (_, i) => i + 1),
+            y: this.state.accuracyHistory.map(acc => acc * 100),
             type: 'scatter',
             mode: 'lines+markers',
             name: isClassification ? 'Accuracy' : 'R² Score',
@@ -1412,8 +1530,8 @@ class DLPlayground {
         
         const layout = {
             title: isClassification ? 
-                `Training Accuracy ${hasHistory ? `(Current: ${(this.state.currentAccuracy * 100).toFixed(2)}%)` : ''}` :
-                `R² Score ${hasHistory ? `(Current: ${(this.state.currentAccuracy * 100).toFixed(2)}%)` : ''}`,
+                `Training Accuracy (Current: ${(this.state.currentAccuracy * 100).toFixed(2)}%)` :
+                `R² Score (Current: ${(this.state.currentAccuracy * 100).toFixed(2)}%)`,
             xaxis: { 
                 title: 'Epoch',
                 showgrid: true,
@@ -1431,16 +1549,6 @@ class DLPlayground {
             font: { color: '#f8fafc' }
         };
         
-        if (!hasHistory) {
-            layout.annotations = [{
-                text: 'Start training to see accuracy curve!',
-                x: 0.5, y: 0.5,
-                xref: 'paper', yref: 'paper',
-                showarrow: false,
-                font: { size: 16, color: '#94a3b8' }
-            }];
-        }
-        
         try {
             Plotly.newPlot('accuracyCurve', [trace], layout, {responsive: true});
         } catch (error) {
@@ -1449,21 +1557,31 @@ class DLPlayground {
     }
     
     plotGradientDescent() {
-        // Show real gradient descent data
-        const epochs = this.state.lossHistory.length > 0 ? 
-            Array.from({ length: this.state.lossHistory.length }, (_, i) => i + 1) :
-            [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+        const hasHistory = this.state.lossHistory.length > 0;
         
-        const lossData = this.state.lossHistory.length > 0 ? 
-            this.state.lossHistory : 
-            [2.5, 2.0, 1.5, 1.2, 1.0, 0.8, 0.6, 0.4, 0.3, 0.2];
-        
-        // Calculate gradient magnitudes
-        const gradientMagnitudes = [];
-        for (let i = 0; i < lossData.length - 1; i++) {
-            const gradient = Math.abs(lossData[i + 1] - lossData[i]);
-            gradientMagnitudes.push(gradient);
+        if (!hasHistory) {
+            const layout = {
+                title: 'Gradient Descent Analysis',
+                xaxis: { title: 'Epoch', gridcolor: '#475569', color: '#f8fafc' },
+                yaxis: { title: 'Loss', gridcolor: '#475569', color: '#f8fafc' },
+                plot_bgcolor: '#1e293b',
+                paper_bgcolor: '#1e293b',
+                font: { color: '#f8fafc' },
+                annotations: [{
+                    text: 'Start training to see gradient descent!',
+                    x: 0.5, y: 0.5,
+                    xref: 'paper', yref: 'paper',
+                    showarrow: false,
+                    font: { size: 16, color: '#94a3b8' }
+                }]
+            };
+            Plotly.newPlot('gradientDescent', [], layout, {responsive: true});
+            return;
         }
+        
+        const epochs = Array.from({ length: this.state.lossHistory.length }, (_, i) => i + 1);
+        const lossData = this.state.lossHistory;
+        const gradientMagnitudes = this.state.gradientHistory;
         
         const trace1 = {
             x: epochs,
@@ -1477,18 +1595,18 @@ class DLPlayground {
         };
         
         const trace2 = {
-            x: epochs.slice(0, -1),
+            x: epochs,
             y: gradientMagnitudes,
             type: 'scatter',
             mode: 'lines+markers',
-            name: 'Gradient Magnitude',
+            name: 'Gradient Magnitude (L2 Norm)',
             line: { color: '#6366f1', width: 2 },
             marker: { size: 6, color: '#6366f1' },
             yaxis: 'y2'
         };
         
         const layout = {
-            title: 'Gradient Descent Analysis',
+            title: 'Gradient Descent Analysis - Real-time Tracking',
             xaxis: { 
                 title: 'Epoch',
                 showgrid: true,
@@ -1503,7 +1621,7 @@ class DLPlayground {
                 side: 'left'
             },
             yaxis2: {
-                title: 'Gradient Magnitude',
+                title: 'Gradient Magnitude (||∇L||₂)',
                 showgrid: false,
                 color: '#6366f1',
                 side: 'right',
@@ -1519,7 +1637,6 @@ class DLPlayground {
             Plotly.newPlot('gradientDescent', [trace1, trace2], layout, {responsive: true});
         } catch (error) {
             console.error('Plotly error:', error);
-            document.getElementById('gradientDescent').innerHTML = '<div style="color: white; text-align: center; padding: 2rem;">Error loading plot: ' + error.message + '</div>';
         }
     }
     
@@ -1627,90 +1744,9 @@ class DLPlayground {
     }
     
     plotWeightEvolution() {
-        // Show actual weight evolution if model exists
-        if (this.state.model) {
-            const epochs = this.state.lossHistory.length > 0 ? 
-                Array.from({ length: this.state.lossHistory.length }, (_, i) => i + 1) :
-                [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
-            
-            // Extract actual weights from model
-            const w1_weights = this.state.model.W1[0]; // First row of W1
-            const w2_weights = this.state.model.W1[1]; // Second row of W1
-            const w3_weights = this.state.model.W2.map(row => row[0]); // W2 weights
-            
-            // Simulate weight evolution over epochs
-            const w1_evolution = epochs.map((_, i) => {
-                const base = w1_weights[0] || 0;
-                return base + Math.sin(i * 0.1) * 0.1;
-            });
-            
-            const w2_evolution = epochs.map((_, i) => {
-                const base = w1_weights[1] || 0;
-                return base + Math.cos(i * 0.1) * 0.1;
-            });
-            
-            const w3_evolution = epochs.map((_, i) => {
-                const base = w3_weights[0] || 0;
-                return base + Math.sin(i * 0.15) * 0.1;
-            });
-            
-            const trace1 = {
-                x: epochs,
-                y: w1_evolution,
-                type: 'scatter',
-                mode: 'lines+markers',
-                name: 'W1 (Input 1 → Hidden)',
-                line: { color: '#10b981', width: 2 },
-                marker: { size: 4, color: '#10b981' }
-            };
-            
-            const trace2 = {
-                x: epochs,
-                y: w2_evolution,
-                type: 'scatter',
-                mode: 'lines+markers',
-                name: 'W2 (Input 2 → Hidden)',
-                line: { color: '#6366f1', width: 2 },
-                marker: { size: 4, color: '#6366f1' }
-            };
-            
-            const trace3 = {
-                x: epochs,
-                y: w3_evolution,
-                type: 'scatter',
-                mode: 'lines+markers',
-                name: 'W3 (Hidden → Output)',
-                line: { color: '#f59e0b', width: 2 },
-                marker: { size: 4, color: '#f59e0b' }
-            };
-            
-            const layout = {
-                title: 'Weight Evolution During Training',
-                xaxis: { 
-                    title: 'Epoch',
-                    showgrid: true,
-                    gridcolor: '#475569',
-                    color: '#f8fafc'
-                },
-                yaxis: { 
-                    title: 'Weight Value',
-                    showgrid: true,
-                    gridcolor: '#475569',
-                    color: '#f8fafc'
-                },
-                plot_bgcolor: '#1e293b',
-                paper_bgcolor: '#1e293b',
-                font: { color: '#f8fafc' },
-                showlegend: true
-            };
-            
-            try {
-                Plotly.newPlot('weightEvolution', [trace1, trace2, trace3], layout, {responsive: true});
-            } catch (error) {
-                console.error('Plotly error:', error);
-                document.getElementById('weightEvolution').innerHTML = '<div style="color: white; text-align: center; padding: 2rem;">Error loading plot: ' + error.message + '</div>';
-            }
-        } else {
+        const hasHistory = this.state.weightHistory.length > 0;
+        
+        if (!hasHistory) {
             const layout = {
                 title: 'Weight Evolution During Training',
                 xaxis: { 
@@ -1729,7 +1765,7 @@ class DLPlayground {
                 paper_bgcolor: '#1e293b',
                 font: { color: '#f8fafc' },
                 annotations: [{
-                    text: 'Initialize a model to see weight evolution!',
+                    text: 'Start training to see weight evolution!',
                     x: 0.5,
                     y: 0.5,
                     xref: 'paper',
@@ -1743,8 +1779,70 @@ class DLPlayground {
                 Plotly.newPlot('weightEvolution', [], layout, {responsive: true});
             } catch (error) {
                 console.error('Plotly error:', error);
-                document.getElementById('weightEvolution').innerHTML = '<div style="color: white; text-align: center; padding: 2rem;">Error loading plot: ' + error.message + '</div>';
             }
+            return;
+        }
+        
+        // Extract actual weight evolution from history
+        const epochs = Array.from({ length: this.state.weightHistory.length }, (_, i) => i + 1);
+        const w1_00_evolution = this.state.weightHistory.map(w => w.W1_00);
+        const w1_01_evolution = this.state.weightHistory.map(w => w.W1_01);
+        const w2_00_evolution = this.state.weightHistory.map(w => w.W2_00);
+        
+        const trace1 = {
+            x: epochs,
+            y: w1_00_evolution,
+            type: 'scatter',
+            mode: 'lines+markers',
+            name: 'W1[0][0] (Input 1 → Hidden 1)',
+            line: { color: '#10b981', width: 2 },
+            marker: { size: 4, color: '#10b981' }
+        };
+        
+        const trace2 = {
+            x: epochs,
+            y: w1_01_evolution,
+            type: 'scatter',
+            mode: 'lines+markers',
+            name: 'W1[0][1] (Input 1 → Hidden 2)',
+            line: { color: '#6366f1', width: 2 },
+            marker: { size: 4, color: '#6366f1' }
+        };
+        
+        const trace3 = {
+            x: epochs,
+            y: w2_00_evolution,
+            type: 'scatter',
+            mode: 'lines+markers',
+            name: 'W2[0][0] (Hidden 1 → Output)',
+            line: { color: '#f59e0b', width: 2 },
+            marker: { size: 4, color: '#f59e0b' }
+        };
+        
+        const layout = {
+            title: 'Weight Evolution During Training - Real-time Tracking',
+            xaxis: { 
+                title: 'Epoch',
+                showgrid: true,
+                gridcolor: '#475569',
+                color: '#f8fafc'
+            },
+            yaxis: { 
+                title: 'Weight Value',
+                showgrid: true,
+                gridcolor: '#475569',
+                color: '#f8fafc'
+            },
+            plot_bgcolor: '#1e293b',
+            paper_bgcolor: '#1e293b',
+            font: { color: '#f8fafc' },
+            showlegend: true
+        };
+        
+        try {
+            Plotly.newPlot('weightEvolution', [trace1, trace2, trace3], layout, {responsive: true});
+        } catch (error) {
+            console.error('Plotly error:', error);
         }
     }
     
@@ -1979,31 +2077,36 @@ class DLPlayground {
     }
     
     updateWeightCalculations() {
-        // Get current hidden units
-        const hiddenUnits = parseInt(document.getElementById('hiddenUnits').value) || 5;
-        
-        // Show demo weight calculations
-        document.getElementById('taskType').textContent = 'BINARY CLASSIFICATION';
-        document.getElementById('targetInfo').textContent = '0 or 1 (Binary Classification)';
-        document.getElementById('activationFunction').textContent = 'RELU';
-        document.getElementById('learningRate').textContent = '0.01';
-        
-        // Generate demo weight matrices based on current hidden units
-        const demoW1 = [];
-        for (let i = 0; i < 2; i++) {
-            demoW1[i] = [];
-            for (let j = 0; j < hiddenUnits; j++) {
-                demoW1[i][j] = (Math.random() - 0.5) * 2; // Random weights between -1 and 1
-            }
+        if (!this.state.model) {
+            // Show not initialized message
+            document.getElementById('taskType').textContent = 'Not initialized';
+            document.getElementById('targetInfo').textContent = 'Initialize model first';
+            document.getElementById('activationFunction').textContent = 'Not initialized';
+            document.getElementById('learningRate').textContent = 'Not initialized';
+            document.getElementById('w1Matrix').textContent = 'Not initialized - Initialize model to see weights';
+            document.getElementById('w2Matrix').textContent = 'Not initialized - Initialize model to see weights';
+            document.getElementById('biasVectors').textContent = 'Not initialized - Initialize model to see biases';
+            return;
         }
         
-        const demoW2 = [];
-        for (let i = 0; i < hiddenUnits; i++) {
-            demoW2[i] = [(Math.random() - 0.5) * 2];
-        }
+        // Use actual model data
+        const taskType = this.state.model.taskType === 'classification' ? 
+            'BINARY CLASSIFICATION' : 'REGRESSION';
+        const targetInfo = this.state.model.taskType === 'classification' ? 
+            '0 or 1 (Binary Classification)' : 'Continuous values (Regression)';
+        const activation = this.state.model.activation.toUpperCase();
+        const learningRate = this.state.model.learningRate.toFixed(4);
         
-        const demob1 = new Array(hiddenUnits).fill(0);
-        const demob2 = [0];
+        document.getElementById('taskType').textContent = taskType;
+        document.getElementById('targetInfo').textContent = targetInfo;
+        document.getElementById('activationFunction').textContent = activation;
+        document.getElementById('learningRate').textContent = learningRate;
+        
+        // Use actual weights from the model
+        const W1 = this.state.model.W1;
+        const W2 = this.state.model.W2;
+        const b1 = this.state.model.b1[0]; // First row contains the bias values
+        const b2 = this.state.model.b2[0];
         
         // Format weight matrices
         const formatMatrix = (matrix, name) => {
@@ -2023,14 +2126,16 @@ class DLPlayground {
             return result;
         };
         
-        // Update weight displays
-        document.getElementById('w1Matrix').textContent = formatMatrix(demoW1, 'W1 (Input → Hidden)');
-        document.getElementById('w2Matrix').textContent = formatMatrix(demoW2, 'W2 (Hidden → Output)');
-        document.getElementById('biasVectors').textContent = formatBias(demob1, demob2);
+        // Update weight displays with actual weights
+        document.getElementById('w1Matrix').textContent = formatMatrix(W1, 'W1 (Input → Hidden)');
+        document.getElementById('w2Matrix').textContent = formatMatrix(W2, 'W2 (Hidden → Output)');
+        document.getElementById('biasVectors').textContent = formatBias(b1, b2);
     }
     
     plotBackpropagation() {
-        if (!this.state.model || this.state.lossHistory.length < 2) {
+        const hasHistory = this.state.gradientHistory.length > 0;
+        
+        if (!hasHistory) {
             const layout = {
                 title: 'Backpropagation Visualization',
                 xaxis: { 
@@ -2063,45 +2168,47 @@ class DLPlayground {
                 Plotly.newPlot('backpropagation', [], layout, {responsive: true});
             } catch (error) {
                 console.error('Plotly error:', error);
-                document.getElementById('backpropagation').innerHTML = '<div style="color: white; text-align: center; padding: 2rem;">Error loading plot: ' + error.message + '</div>';
             }
             return;
         }
         
-        // Calculate gradient magnitudes for each layer
-        const epochs = this.state.lossHistory.length;
-        const w1_gradients = [];
-        const w2_gradients = [];
+        // Use actual gradient history
+        const epochs = Array.from({ length: this.state.gradientHistory.length }, (_, i) => i + 1);
+        const gradients = this.state.gradientHistory;
         
-        for (let i = 0; i < epochs; i++) {
-            // Simulate decreasing gradients as training progresses
-            const decay = Math.exp(-i * 0.1);
-            w1_gradients.push(0.5 * decay + Math.random() * 0.1);
-            w2_gradients.push(0.3 * decay + Math.random() * 0.05);
+        // Calculate moving average for smoothing
+        const windowSize = Math.min(5, Math.floor(gradients.length / 5) || 1);
+        const smoothedGradients = [];
+        for (let i = 0; i < gradients.length; i++) {
+            const start = Math.max(0, i - windowSize + 1);
+            const window = gradients.slice(start, i + 1);
+            const avg = window.reduce((a, b) => a + b, 0) / window.length;
+            smoothedGradients.push(avg);
         }
         
         const trace1 = {
-            x: Array.from({ length: epochs }, (_, i) => i + 1),
-            y: w1_gradients,
+            x: epochs,
+            y: gradients,
             type: 'scatter',
             mode: 'lines+markers',
-            name: 'W1 Gradients (Input→Hidden)',
+            name: 'Raw Gradient Magnitude (||∇L||₂)',
+            line: { color: '#6366f1', width: 2, dash: 'dot' },
+            marker: { size: 4, color: '#6366f1', opacity: 0.5 },
+            opacity: 0.5
+        };
+        
+        const trace2 = {
+            x: epochs,
+            y: smoothedGradients,
+            type: 'scatter',
+            mode: 'lines+markers',
+            name: `Smoothed (MA-${windowSize})`,
             line: { color: '#10b981', width: 3 },
             marker: { size: 6, color: '#10b981' }
         };
         
-        const trace2 = {
-            x: Array.from({ length: epochs }, (_, i) => i + 1),
-            y: w2_gradients,
-            type: 'scatter',
-            mode: 'lines+markers',
-            name: 'W2 Gradients (Hidden→Output)',
-            line: { color: '#6366f1', width: 3 },
-            marker: { size: 6, color: '#6366f1' }
-        };
-        
         const layout = {
-            title: 'Backpropagation: Gradient Flow Through Layers',
+            title: 'Backpropagation: Gradient Flow - Real-time Tracking',
             xaxis: { 
                 title: 'Epoch',
                 showgrid: true,
@@ -2109,24 +2216,25 @@ class DLPlayground {
                 color: '#f8fafc'
             },
             yaxis: { 
-                title: 'Gradient Magnitude',
+                title: 'Gradient Magnitude (||∇L||₂)',
                 showgrid: true,
                 gridcolor: '#475569',
-                color: '#f8fafc'
+                color: '#f8fafc',
+                type: 'log'  // Log scale for better visualization
             },
             plot_bgcolor: '#1e293b',
             paper_bgcolor: '#1e293b',
             font: { color: '#f8fafc' },
             showlegend: true,
             annotations: [{
-                text: 'Shows how gradients flow backward through the network during training',
+                text: 'Shows how gradient magnitude changes during backpropagation (log scale)',
                 x: 0.5,
-                y: 0.95,
+                y: 0.98,
                 xref: 'paper',
                 yref: 'paper',
                 showarrow: false,
-                font: { size: 12, color: '#94a3b8' },
-                bgcolor: 'rgba(0,0,0,0.5)',
+                font: { size: 11, color: '#94a3b8' },
+                bgcolor: 'rgba(0,0,0,0.7)',
                 bordercolor: '#475569',
                 borderwidth: 1
             }]
@@ -2136,7 +2244,6 @@ class DLPlayground {
             Plotly.newPlot('backpropagation', [trace1, trace2], layout, {responsive: true});
         } catch (error) {
             console.error('Plotly error:', error);
-            document.getElementById('backpropagation').innerHTML = '<div style="color: white; text-align: center; padding: 2rem;">Error loading plot: ' + error.message + '</div>';
         }
     }
     
