@@ -754,25 +754,36 @@ class DLPlayground {
     }
     
     initializeModel() {
-        // First check if dataset exists
-        if (!this.state.dataset) {
-            this.showMessage('Please generate a dataset first!', 'error');
-            console.error('No dataset found! Generate dataset before initializing model.');
-            return;
-        }
-        
-        const hiddenUnits = parseInt(document.getElementById('hiddenUnits').value);
-        const activation = document.getElementById('activation').value;
-        const learningRate = parseFloat(document.getElementById('learningRate').value);
-        const l2Lambda = parseFloat(document.getElementById('l2Lambda').value);
-        const taskType = this.state.taskType || 'classification';
-        
-        console.log('Initializing model with:', { hiddenUnits, activation, learningRate, l2Lambda, taskType });
-        
+        console.log('========== INITIALIZE MODEL CALLED ==========');
         try {
-            this.state.model = new MLP(2, hiddenUnits, activation, learningRate, l2Lambda, 42, taskType);
-            console.log('Model created:', this.state.model);
+            // First check if dataset exists
+            if (!this.state.dataset) {
+                this.showMessage('Please generate a dataset first!', 'error');
+                console.error('❌ No dataset found! Generate dataset before initializing model.');
+                return;
+            }
             
+            const hiddenUnits = parseInt(document.getElementById('hiddenUnits').value);
+            const activation = document.getElementById('activation').value;
+            const learningRate = parseFloat(document.getElementById('learningRate').value);
+            const l2Lambda = parseFloat(document.getElementById('l2Lambda').value);
+            const taskType = this.state.taskType || 'classification';
+            
+            console.log('📝 Initializing model with:', { hiddenUnits, activation, learningRate, l2Lambda, taskType });
+            
+            // Create model
+            console.log('🔨 Creating MLP...');
+            this.state.model = new MLP(2, hiddenUnits, activation, learningRate, l2Lambda, 42, taskType);
+            
+            // Verify model was created properly
+            console.log('✅ Model created');
+            console.log('Model W1:', this.state.model.W1 ? `${this.state.model.W1.length}x${this.state.model.W1[0].length}` : 'undefined');
+            console.log('Model W2:', this.state.model.W2 ? `${this.state.model.W2.length}x${this.state.model.W2[0].length}` : 'undefined');
+            console.log('Model b1:', this.state.model.b1 ? `${this.state.model.b1.length}x${this.state.model.b1[0].length}` : 'undefined');
+            console.log('Model b2:', this.state.model.b2 ? `${this.state.model.b2.length}x${this.state.model.b2[0].length}` : 'undefined');
+            
+            // Reset training state
+            console.log('📊 Resetting training state...');
             this.state.lossHistory = [];
             this.state.accuracyHistory = [];
             this.state.gradientHistory = [];
@@ -782,24 +793,35 @@ class DLPlayground {
             this.state.currentAccuracy = 0;
             
             // Calculate initial metrics
+            console.log('🔢 Calculating initial metrics...');
             const { X, y } = this.state.dataset;
             const forwardResult = this.state.model.forward(X);
             this.state.currentLoss = this.state.model.computeLoss(y, forwardResult.a2);
             this.state.currentAccuracy = this.state.model.computeAccuracy(y, forwardResult.a2);
             
-            console.log('Initial metrics:', { 
+            console.log('✅ Initial metrics:', { 
                 loss: this.state.currentLoss, 
                 accuracy: this.state.currentAccuracy 
             });
             
-            // Update all UI elements
+            // Update UI elements one by one
+            console.log('🎨 Updating UI...');
             this.updateUI();
+            
+            console.log('📐 Updating math equations...');
             this.updateMathEquations();
+            
+            console.log('📈 Updating metrics...');
             this.updateMetrics();
+            
+            console.log('🕸️ Plotting neural network...');
             this.plotNeuralNetwork();
+            
+            console.log('⚖️ Updating weight calculations...');
             this.updateWeightCalculations();
             
             // Update all plots to remove "not initialized" messages
+            console.log('📊 Updating plots...');
             this.plotLossCurve();
             this.plotAccuracyCurve();
             this.plotGradientDescent();
@@ -808,10 +830,19 @@ class DLPlayground {
             this.plotDecisionBoundary();
             
             this.showMessage('Model initialized successfully!', 'success');
-            console.log('Model initialization complete!');
+            console.log('========== ✅ MODEL INITIALIZATION COMPLETE ==========');
         } catch (error) {
-            console.error('Error initializing model:', error);
+            console.error('========== ❌ ERROR IN INITIALIZATION ==========');
+            console.error('Error name:', error.name);
+            console.error('Error message:', error.message);
+            console.error('Error stack:', error.stack);
+            console.error('Current state:', {
+                hasModel: !!this.state.model,
+                hasDataset: !!this.state.dataset,
+                taskType: this.state.taskType
+            });
             this.showMessage('Error initializing model: ' + error.message, 'error');
+            alert('Error initializing model:\n\n' + error.message + '\n\nCheck browser console (F12) for details.');
         }
     }
     
@@ -2151,17 +2182,39 @@ class DLPlayground {
             document.getElementById('learningRate').textContent = learningRate;
             
             // Use actual weights from the model
+            console.log('Checking model weights...');
+            console.log('W1 exists:', !!this.state.model.W1);
+            console.log('W2 exists:', !!this.state.model.W2);
+            console.log('b1 exists:', !!this.state.model.b1);
+            console.log('b2 exists:', !!this.state.model.b2);
+            
+            if (!this.state.model.W1 || !this.state.model.W2 || !this.state.model.b1 || !this.state.model.b2) {
+                throw new Error('Model weights not properly initialized');
+            }
+            
             const W1 = this.state.model.W1;
             const W2 = this.state.model.W2;
             const b1 = this.state.model.b1;
             const b2 = this.state.model.b2;
             
-            console.log('Weight shapes:', { 
-                W1: W1.length + 'x' + W1[0].length,
-                W2: W2.length + 'x' + W2[0].length,
-                b1: b1.length + 'x' + b1[0].length,
-                b2: b2.length + 'x' + b2[0].length
-            });
+            console.log('Weight array checks:');
+            console.log('W1 is array:', Array.isArray(W1), 'length:', W1 ? W1.length : 'undefined');
+            console.log('W2 is array:', Array.isArray(W2), 'length:', W2 ? W2.length : 'undefined');
+            console.log('b1 is array:', Array.isArray(b1), 'length:', b1 ? b1.length : 'undefined');
+            console.log('b2 is array:', Array.isArray(b2), 'length:', b2 ? b2.length : 'undefined');
+            
+            if (W1 && W1.length > 0 && W1[0]) {
+                console.log('W1 shape:', W1.length + 'x' + W1[0].length);
+            }
+            if (W2 && W2.length > 0 && W2[0]) {
+                console.log('W2 shape:', W2.length + 'x' + W2[0].length);
+            }
+            if (b1 && b1.length > 0 && b1[0]) {
+                console.log('b1 shape:', b1.length + 'x' + b1[0].length);
+            }
+            if (b2 && b2.length > 0 && b2[0]) {
+                console.log('b2 shape:', b2.length + 'x' + b2[0].length);
+            }
             
             // Format weight matrices
             const formatMatrix = (matrix, name) => {
