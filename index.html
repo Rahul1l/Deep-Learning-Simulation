@@ -1,0 +1,1090 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SUPER DL PLAYGROUND - MLP from Scratch</title>
+    <script src="https://cdn.jsdelivr.net/npm/numpy@1.24.0/dist/numpy.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/plotly.js@2.26.0/dist/plotly.min.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --primary: #6366f1;
+            --primary-dark: #4f46e5;
+            --secondary: #8b5cf6;
+            --accent: #f59e0b;
+            --success: #10b981;
+            --warning: #f59e0b;
+            --error: #ef4444;
+            --bg-primary: #0f172a;
+            --bg-secondary: #1e293b;
+            --bg-tertiary: #334155;
+            --text-primary: #f8fafc;
+            --text-secondary: #cbd5e1;
+            --text-muted: #94a3b8;
+            --border: #475569;
+            --shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.3);
+            --shadow-lg: 0 20px 40px -10px rgba(0, 0, 0, 0.4);
+            --radius: 12px;
+            --radius-lg: 16px;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: linear-gradient(135deg, var(--bg-primary) 0%, #1a1a2e 100%);
+            color: var(--text-primary);
+            min-height: 100vh;
+            line-height: 1.6;
+        }
+
+        .app {
+            display: grid;
+            grid-template-columns: 320px 1fr;
+            min-height: 100vh;
+        }
+
+        .sidebar {
+            background: var(--bg-secondary);
+            border-right: 1px solid var(--border);
+            overflow-y: auto;
+            padding: 0;
+        }
+
+        .sidebar-header {
+            padding: 2rem;
+            background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
+            text-align: center;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+
+        .main-title {
+            font-size: 1.5rem;
+            font-weight: 900;
+            color: white;
+            margin-bottom: 0.25rem;
+            letter-spacing: -0.025em;
+        }
+
+        .subtitle {
+            font-size: 0.875rem;
+            color: rgba(255, 255, 255, 0.8);
+            font-weight: 500;
+        }
+
+        .sidebar-content {
+            padding: 1.5rem;
+        }
+
+        .section {
+            background: var(--bg-tertiary);
+            border-radius: var(--radius);
+            padding: 1.25rem;
+            margin-bottom: 1rem;
+            border: 1px solid var(--border);
+            transition: all 0.2s ease;
+        }
+
+        .section:hover {
+            transform: translateY(-1px);
+            box-shadow: var(--shadow);
+        }
+
+        .section-title {
+            font-size: 0.875rem;
+            font-weight: 700;
+            color: var(--text-primary);
+            margin-bottom: 1rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .section-title::before {
+            content: '';
+            width: 3px;
+            height: 16px;
+            background: var(--primary);
+            border-radius: 2px;
+        }
+
+        .form-group {
+            margin-bottom: 1rem;
+        }
+
+        .form-label {
+            display: block;
+            font-size: 0.75rem;
+            font-weight: 600;
+            color: var(--text-secondary);
+            margin-bottom: 0.5rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .form-input, .form-select {
+            width: 100%;
+            padding: 0.75rem;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            font-size: 0.875rem;
+            transition: all 0.2s ease;
+            font-family: inherit;
+        }
+
+        .form-input:focus, .form-select:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+        }
+
+        .form-range {
+            width: 100%;
+            height: 6px;
+            background: var(--border);
+            border-radius: 3px;
+            outline: none;
+            -webkit-appearance: none;
+            margin: 0.5rem 0;
+        }
+
+        .form-range::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 18px;
+            height: 18px;
+            background: var(--primary);
+            border-radius: 50%;
+            cursor: pointer;
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+            transition: all 0.2s ease;
+        }
+
+        .form-range::-webkit-slider-thumb:hover {
+            transform: scale(1.1);
+            box-shadow: 0 4px 12px rgba(99, 102, 241, 0.4);
+        }
+
+        .range-value {
+            font-size: 0.75rem;
+            font-weight: 600;
+            color: var(--primary);
+            background: rgba(99, 102, 241, 0.1);
+            padding: 0.25rem 0.5rem;
+            border-radius: 4px;
+            display: inline-block;
+            margin-top: 0.25rem;
+        }
+
+        .btn {
+            background: var(--primary);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            padding: 0.75rem 1rem;
+            font-weight: 600;
+            font-size: 0.875rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            font-family: inherit;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+            width: 100%;
+            margin-bottom: 0.5rem;
+        }
+
+        .btn:hover {
+            background: var(--primary-dark);
+            transform: translateY(-1px);
+            box-shadow: var(--shadow);
+        }
+
+        .btn:active {
+            transform: translateY(0);
+        }
+
+        .btn-success {
+            background: var(--success);
+        }
+
+        .btn-success:hover {
+            background: #059669;
+        }
+
+        .btn-danger {
+            background: var(--error);
+        }
+
+        .btn-danger:hover {
+            background: #dc2626;
+        }
+
+        .btn-secondary {
+            background: var(--bg-tertiary);
+            color: var(--text-primary);
+            border: 1px solid var(--border);
+        }
+
+        .btn-secondary:hover {
+            background: var(--border);
+        }
+
+        .status {
+            padding: 0.75rem 1rem;
+            border-radius: 8px;
+            font-weight: 600;
+            font-size: 0.875rem;
+            text-align: center;
+            margin-bottom: 1rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+        }
+
+        .status-active {
+            background: rgba(16, 185, 129, 0.1);
+            color: var(--success);
+            border: 1px solid rgba(16, 185, 129, 0.2);
+        }
+
+        .status-paused {
+            background: rgba(239, 68, 68, 0.1);
+            color: var(--error);
+            border: 1px solid rgba(239, 68, 68, 0.2);
+        }
+
+        .main-content {
+            padding: 2rem;
+            overflow-y: auto;
+        }
+
+        .header {
+            margin-bottom: 2rem;
+        }
+
+        .main-title-large {
+            font-size: 2.5rem;
+            font-weight: 900;
+            background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 0.5rem;
+            letter-spacing: -0.025em;
+        }
+
+        .subtitle-large {
+            font-size: 1.125rem;
+            color: var(--text-secondary);
+            font-weight: 500;
+        }
+
+        .tabs {
+            display: flex;
+            background: var(--bg-secondary);
+            border-radius: var(--radius);
+            padding: 0.25rem;
+            margin-bottom: 2rem;
+            border: 1px solid var(--border);
+        }
+
+        .tab {
+            flex: 1;
+            padding: 0.75rem 1rem;
+            background: transparent;
+            color: var(--text-muted);
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            font-weight: 600;
+            font-size: 0.875rem;
+            font-family: inherit;
+        }
+
+        .tab.active {
+            background: var(--primary);
+            color: white;
+            box-shadow: var(--shadow);
+        }
+
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        .metrics {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin-bottom: 2rem;
+        }
+
+        .metric {
+            background: var(--bg-secondary);
+            border-radius: var(--radius);
+            padding: 1.5rem;
+            text-align: center;
+            border: 1px solid var(--border);
+            transition: all 0.2s ease;
+        }
+
+        .metric:hover {
+            transform: translateY(-2px);
+            box-shadow: var(--shadow);
+        }
+
+        .metric-value {
+            font-size: 2rem;
+            font-weight: 800;
+            color: var(--primary);
+            margin-bottom: 0.5rem;
+            letter-spacing: -0.025em;
+        }
+
+        .metric-label {
+            color: var(--text-secondary);
+            font-weight: 600;
+            font-size: 0.875rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .plot-container {
+            background: var(--bg-secondary);
+            border-radius: var(--radius-lg);
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+            border: 1px solid var(--border);
+            box-shadow: var(--shadow);
+        }
+
+        .achievement {
+            background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
+            color: white;
+            padding: 0.75rem 1rem;
+            border-radius: 8px;
+            margin: 0.5rem 0;
+            font-weight: 600;
+            font-size: 0.875rem;
+            text-align: center;
+            box-shadow: var(--shadow);
+        }
+
+        .hidden {
+            display: none;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 3rem;
+            color: var(--text-muted);
+        }
+
+        .message {
+            position: fixed;
+            top: 2rem;
+            right: 2rem;
+            padding: 1rem 1.5rem;
+            border-radius: 8px;
+            font-weight: 600;
+            z-index: 1000;
+            box-shadow: var(--shadow-lg);
+            animation: slideIn 0.3s ease;
+        }
+
+        .message-success {
+            background: var(--success);
+            color: white;
+        }
+
+        .message-error {
+            background: var(--error);
+            color: white;
+        }
+
+        .message-warning {
+            background: var(--warning);
+            color: white;
+        }
+
+        @keyframes slideIn {
+            from {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+
+        .btn-group {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 0.5rem;
+            margin-top: 0.5rem;
+        }
+
+        .btn-group .btn {
+            margin-bottom: 0;
+        }
+
+        .achievements-section {
+            margin-top: 1rem;
+        }
+
+        .achievements-section.hidden {
+            display: none;
+        }
+
+        .achievements-section:not(.hidden) {
+            display: block;
+        }
+
+        /* Responsive */
+        @media (max-width: 1024px) {
+            .app {
+                grid-template-columns: 1fr;
+            }
+            
+            .sidebar {
+                order: 2;
+            }
+            
+            .main-content {
+                order: 1;
+            }
+        }
+
+        /* Scrollbar */
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: var(--bg-primary);
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: var(--border);
+            border-radius: 3px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: var(--text-muted);
+        }
+        
+        .weight-calculations {
+            background: var(--card-bg);
+            border-radius: var(--border-radius);
+            padding: 1.5rem;
+            margin-top: 1.5rem;
+            box-shadow: var(--shadow);
+        }
+        
+        .weight-calculations h3 {
+            color: var(--accent-color);
+            margin-bottom: 1rem;
+            font-size: 1.2rem;
+        }
+        
+        .weight-details {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 1.5rem;
+        }
+        
+        .weight-section {
+            background: var(--bg-secondary);
+            border-radius: var(--border-radius);
+            padding: 1rem;
+            border: 1px solid var(--border-color);
+        }
+        
+        .weight-section h4 {
+            color: var(--text-primary);
+            margin-bottom: 0.5rem;
+            font-size: 1rem;
+        }
+        
+        .weight-info p {
+            margin: 0.5rem 0;
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+        }
+        
+        .weight-info strong {
+            color: var(--text-primary);
+        }
+        
+        .matrix-display {
+            background: var(--bg-primary);
+            border: 2px solid var(--accent-color);
+            border-radius: 8px;
+            padding: 1rem;
+            margin: 0.5rem 0;
+            font-family: 'Courier New', monospace;
+            font-size: 1rem;
+            color: var(--text-primary);
+            white-space: pre-wrap;
+            max-height: 300px;
+            overflow-y: auto;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            font-weight: bold;
+        }
+        
+        .weight-section h4 {
+            color: var(--accent-color);
+            margin-bottom: 1rem;
+            font-size: 1.2rem;
+            border-bottom: 2px solid var(--accent-color);
+            padding-bottom: 0.5rem;
+        }
+        
+        .weight-info p {
+            margin: 0.8rem 0;
+            color: var(--text-primary);
+            font-size: 1rem;
+        }
+        
+        .weight-info strong {
+            color: var(--accent-color);
+            font-size: 1.1rem;
+        }
+        
+        .dataset-preview {
+            background: var(--card-bg);
+            border-radius: var(--border-radius);
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+            box-shadow: var(--shadow);
+        }
+        
+        .dataset-info {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin-bottom: 1rem;
+        }
+        
+        .dataset-info p {
+            margin: 0.5rem 0;
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+        }
+        
+        .dataset-info strong {
+            color: var(--text-primary);
+        }
+        
+        .dataset-table {
+            overflow-x: auto;
+        }
+        
+        .dataset-table table {
+            width: 100%;
+            border-collapse: collapse;
+            background: var(--bg-primary);
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        
+        .dataset-table th {
+            background: var(--accent-color);
+            color: white;
+            padding: 0.75rem;
+            text-align: left;
+            font-weight: bold;
+        }
+        
+        .dataset-table td {
+            padding: 0.75rem;
+            border-bottom: 1px solid var(--border-color);
+            color: var(--text-primary);
+        }
+        
+        .dataset-table tr:nth-child(even) {
+            background: var(--bg-secondary);
+        }
+        
+        .dataset-table tr:hover {
+            background: var(--accent-color);
+            color: white;
+        }
+        
+        .metric-icon {
+            font-size: 2rem;
+            margin-bottom: 0.5rem;
+            text-align: center;
+        }
+        
+        .metric-subtitle {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            margin-top: 0.25rem;
+            text-align: center;
+        }
+        
+        .metric-value {
+            font-size: 2.5rem;
+            font-weight: bold;
+            margin: 0.5rem 0;
+            text-align: center;
+            transition: all 0.3s ease;
+        }
+        
+        .metric-label {
+            font-size: 1rem;
+            font-weight: 600;
+            color: var(--text-primary);
+            text-align: center;
+            margin-bottom: 0.25rem;
+        }
+        
+        .metric {
+            background: var(--card-bg);
+            border-radius: var(--border-radius);
+            padding: 1.5rem;
+            text-align: center;
+            box-shadow: var(--shadow);
+            border: 2px solid transparent;
+            transition: all 0.3s ease;
+            cursor: pointer;
+            user-select: none;
+        }
+        
+        .metric:hover {
+            border-color: var(--accent-color);
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+            background: var(--bg-secondary);
+        }
+        
+        .metric:active {
+            transform: translateY(0px);
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+        }
+        
+        .interactive-metric {
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .interactive-metric:hover {
+            transform: translateY(-4px) scale(1.02);
+            box-shadow: 0 12px 30px rgba(0, 0, 0, 0.2);
+        }
+        
+        .metric-progress {
+            width: 100%;
+            height: 4px;
+            background: var(--bg-secondary);
+            border-radius: 2px;
+            margin-top: 0.5rem;
+            overflow: hidden;
+        }
+        
+        .progress-bar {
+            height: 100%;
+            background: linear-gradient(90deg, #10b981, #6366f1);
+            border-radius: 2px;
+            width: 0%;
+            transition: width 0.3s ease;
+        }
+        
+        .metric-trend {
+            position: absolute;
+            top: 0.5rem;
+            right: 0.5rem;
+            font-size: 1.2rem;
+            font-weight: bold;
+            color: var(--accent-color);
+            transition: all 0.3s ease;
+        }
+        
+        .metric-tooltip {
+            position: absolute;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            padding: 0.75rem 1rem;
+            border-radius: 8px;
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.3);
+            border: 1px solid var(--accent-color);
+            font-size: 0.9rem;
+            z-index: 1000;
+            pointer-events: none;
+            opacity: 0;
+            transform: translateY(10px);
+            transition: all 0.3s ease;
+            max-width: 250px;
+        }
+        
+        .metric-tooltip.show {
+            opacity: 1;
+            transform: translateY(0);
+        }
+        
+        .metric-tooltip::after {
+            content: '';
+            position: absolute;
+            top: -5px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 0;
+            height: 0;
+            border-left: 5px solid transparent;
+            border-right: 5px solid transparent;
+            border-bottom: 5px solid var(--accent-color);
+        }
+    </style>
+</head>
+<body>
+    <div class="app">
+        <!-- Sidebar -->
+        <div class="sidebar">
+            <div class="sidebar-header">
+                <div class="main-title">SUPER DL PLAYGROUND</div>
+                <div class="subtitle">Ultimate MLP Learning Experience</div>
+            </div>
+
+            <div class="sidebar-content">
+                <!-- Status -->
+                <div class="section">
+                    <div class="section-title">Status Dashboard</div>
+                    <div id="status" class="status status-paused">
+                        <span>⏸️</span>
+                        <span>Training Paused</span>
+                    </div>
+                </div>
+
+                <!-- Dataset Controls -->
+                <div class="section">
+                    <div class="section-title">Dataset</div>
+                    <div class="form-group">
+                        <label class="form-label">Task Type</label>
+                        <select id="taskType" class="form-select">
+                            <option value="classification">Classification</option>
+                            <option value="regression">Regression</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Dataset Type</label>
+                        <select id="datasetType" class="form-select">
+                            <option value="xor">XOR</option>
+                            <option value="moons">Make Moons</option>
+                            <option value="circles">Make Circles</option>
+                            <option value="linear">Linearly Separable</option>
+                            <option value="spiral">Spiral</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Noise Level</label>
+                        <input type="range" id="noiseLevel" class="form-range" min="0" max="0.5" step="0.01" value="0.1">
+                        <div class="range-value" id="noiseValue">0.1</div>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Train/Test Split</label>
+                        <input type="range" id="trainSplit" class="form-range" min="0.5" max="0.9" step="0.05" value="0.8">
+                        <div class="range-value" id="splitValue">0.8</div>
+                    </div>
+                    <button id="generateDataset" class="btn btn-success">Generate Dataset</button>
+                </div>
+
+                <!-- Model Architecture -->
+                <div class="section">
+                    <div class="section-title">Model Architecture</div>
+                    <div class="form-group">
+                        <label class="form-label">Hidden Units</label>
+                        <input type="range" id="hiddenUnits" class="form-range" min="1" max="20" step="1" value="5">
+                        <div class="range-value" id="hiddenValue">5</div>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Activation Function</label>
+                        <select id="activation" class="form-select">
+                            <option value="relu">ReLU</option>
+                            <option value="leaky_relu">Leaky ReLU</option>
+                            <option value="tanh">Tanh</option>
+                            <option value="sigmoid">Sigmoid</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Learning Rate</label>
+                        <input type="range" id="learningRate" class="form-range" min="0.001" max="0.1" step="0.001" value="0.01">
+                        <div class="range-value" id="lrValue">0.01</div>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">L2 Regularization</label>
+                        <input type="range" id="l2Lambda" class="form-range" min="0" max="0.01" step="0.001" value="0.0">
+                        <div class="range-value" id="l2Value">0.0</div>
+                    </div>
+                    <button id="initializeModel" class="btn">Initialize Model</button>
+                </div>
+
+                <!-- Training Controls -->
+                <div class="section">
+                    <div class="section-title">Training Controls</div>
+                    <div class="form-group">
+                        <label class="form-label">Max Epochs</label>
+                        <input type="range" id="maxEpochs" class="form-range" min="10" max="1000" step="10" value="100">
+                        <div class="range-value" id="epochsValue">100</div>
+                    </div>
+                    <div class="btn-group">
+                        <button id="startTraining" class="btn btn-success">Start</button>
+                        <button id="pauseTraining" class="btn btn-danger">Pause</button>
+                    </div>
+                    <div class="btn-group">
+                        <button id="oneEpoch" class="btn btn-secondary">One Epoch</button>
+                        <button id="resetWeights" class="btn btn-danger">Reset</button>
+                    </div>
+                    <div class="btn-group" style="margin-top: 10px;">
+                        <button id="testUpdate" class="btn" style="background: #ff6b6b; color: white;">TEST UPDATE METRICS</button>
+                    </div>
+                </div>
+
+                <!-- Export/Import -->
+                <div class="section">
+                    <div class="section-title">Export/Import</div>
+                    <div class="btn-group">
+                        <button id="exportModel" class="btn btn-secondary">Export Model</button>
+                        <button id="exportData" class="btn btn-secondary">Export Data</button>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Import Model</label>
+                        <input type="file" id="importModel" class="form-input" accept=".json">
+                    </div>
+                </div>
+
+                <!-- Achievements -->
+                <div id="achievements" class="section achievements-section hidden">
+                    <div class="section-title">Achievements</div>
+                    <div id="achievementList"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Content -->
+        <div class="main-content">
+            <div class="header">
+                <div class="main-title-large">Deep Learning Playground</div>
+                <div class="subtitle-large">Interactive Neural Network Training & Visualization</div>
+            </div>
+
+            <!-- Tabs -->
+            <div class="tabs">
+                <button class="tab active" data-tab="playground">Playground</button>
+                <button class="tab" data-tab="analysis">Analysis</button>
+                <button class="tab" data-tab="network">Neural Network</button>
+            </div>
+
+            <!-- Tab Contents -->
+            <div id="playground" class="tab-content active">
+                <div class="metrics">
+                    <div class="metric interactive-metric" onclick="showEpochDetails()" onmouseover="showEpochTooltip(event)" onmouseout="hideTooltip()">
+                        <div class="metric-value" id="currentEpoch">0</div>
+                        <div class="metric-label">Current Epoch</div>
+                        <div class="metric-subtitle">Click for details</div>
+                        <div class="metric-progress">
+                            <div class="progress-bar" id="epochProgress"></div>
+                        </div>
+                    </div>
+                    <div class="metric interactive-metric" onclick="showLossDetails()" onmouseover="showLossTooltip(event)" onmouseout="hideTooltip()">
+                        <div class="metric-value" id="currentLoss">0.0000</div>
+                        <div class="metric-label">Current Loss</div>
+                        <div class="metric-subtitle">Click for details</div>
+                        <div class="metric-trend" id="lossTrend">→</div>
+                    </div>
+                    <div class="metric interactive-metric" onclick="showAccuracyDetails()" onmouseover="showAccuracyTooltip(event)" onmouseout="hideTooltip()">
+                        <div class="metric-value" id="currentAccuracy">0.00%</div>
+                        <div class="metric-label">Accuracy</div>
+                        <div class="metric-subtitle">Click for details</div>
+                        <div class="metric-trend" id="accuracyTrend">→</div>
+                    </div>
+                </div>
+                
+                <!-- Tooltip -->
+                <div id="metricTooltip" class="metric-tooltip"></div>
+
+                <!-- Dataset Preview -->
+                <div class="dataset-preview">
+                    <h3 style="color: #6366f1; margin-bottom: 1rem;">Dataset Preview</h3>
+                    <div id="datasetInfo" class="dataset-info">
+                        <p><strong>Dataset:</strong> <span id="datasetName">None</span></p>
+                        <p><strong>Size:</strong> <span id="datasetSize">0 samples</span></p>
+                        <p><strong>Features:</strong> <span id="datasetFeatures">2D (X1, X2)</span></p>
+                        <p><strong>Classes:</strong> <span id="datasetClasses">Binary (0, 1)</span></p>
+                    </div>
+                    <div id="datasetTable" class="dataset-table">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Sample</th>
+                                    <th>X1</th>
+                                    <th>X2</th>
+                                    <th>Target</th>
+                                </tr>
+                            </thead>
+                            <tbody id="datasetTableBody">
+                                <tr><td colspan="4" style="text-align: center; color: #94a3b8;">No dataset loaded</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="plot-container">
+                    <div id="decisionBoundary" style="height: 500px;"></div>
+                </div>
+
+                <div class="plot-container">
+                    <div id="lossCurve" style="height: 300px;"></div>
+                </div>
+            </div>
+
+        <div id="analysis" class="tab-content">
+            <!-- Mathematical Equations -->
+            <div class="plot-container">
+                <h3 style="color: #f59e0b; margin-bottom: 1rem; text-align: center;">📐 Mathematical Equations</h3>
+                <div id="mathematicalEquations" style="padding: 1rem; background: #0f172a; border-radius: 8px;">
+                    <div style="margin-bottom: 1.5rem;">
+                        <h4 style="color: #10b981; margin-bottom: 0.5rem;">Forward Propagation:</h4>
+                        <div style="background: #1e293b; padding: 1rem; border-radius: 8px; font-family: 'Courier New', monospace; line-height: 2;">
+                            <div>z₁ = X · W₁ + b₁</div>
+                            <div>a₁ = σ(z₁)  <span style="color: #94a3b8;">// activation function</span></div>
+                            <div>z₂ = a₁ · W₂ + b₂</div>
+                            <div id="outputEquation">ŷ = sigmoid(z₂)  <span style="color: #94a3b8;">// for classification</span></div>
+                        </div>
+                    </div>
+                    <div style="margin-bottom: 1.5rem;">
+                        <h4 style="color: #ef4444; margin-bottom: 0.5rem;">Loss Function:</h4>
+                        <div style="background: #1e293b; padding: 1rem; border-radius: 8px; font-family: 'Courier New', monospace; line-height: 2;">
+                            <div id="lossEquation">L = -1/m Σ [y·log(ŷ) + (1-y)·log(1-ŷ)]  <span style="color: #94a3b8;">// Binary Cross-Entropy</span></div>
+                        </div>
+                    </div>
+                    <div>
+                        <h4 style="color: #6366f1; margin-bottom: 0.5rem;">Backward Propagation (Gradients):</h4>
+                        <div style="background: #1e293b; padding: 1rem; border-radius: 8px; font-family: 'Courier New', monospace; line-height: 2;">
+                            <div>∂L/∂z₂ = ŷ - y</div>
+                            <div>∂L/∂W₂ = a₁ᵀ · ∂L/∂z₂</div>
+                            <div>∂L/∂b₂ = Σ(∂L/∂z₂)</div>
+                            <div>∂L/∂a₁ = ∂L/∂z₂ · W₂ᵀ</div>
+                            <div>∂L/∂z₁ = ∂L/∂a₁ ⊙ σ'(z₁)  <span style="color: #94a3b8;">// element-wise product</span></div>
+                            <div>∂L/∂W₁ = Xᵀ · ∂L/∂z₁</div>
+                            <div>∂L/∂b₁ = Σ(∂L/∂z₁)</div>
+                        </div>
+                    </div>
+                    <div style="margin-top: 1.5rem;">
+                        <h4 style="color: #f59e0b; margin-bottom: 0.5rem;">Weight Update (Gradient Descent):</h4>
+                        <div style="background: #1e293b; padding: 1rem; border-radius: 8px; font-family: 'Courier New', monospace; line-height: 2;">
+                            <div>W₁ ← W₁ - α · ∂L/∂W₁</div>
+                            <div>W₂ ← W₂ - α · ∂L/∂W₂</div>
+                            <div>b₁ ← b₁ - α · ∂L/∂b₁</div>
+                            <div>b₂ ← b₂ - α · ∂L/∂b₂</div>
+                            <div style="color: #94a3b8; margin-top: 0.5rem;">where α = learning rate</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Interactive Learning Rate 3D Visualization -->
+            <div class="plot-container">
+                <h3 style="color: #6366f1; margin-bottom: 1rem; text-align: center;">🎯 Interactive Learning Rate Impact (3D)</h3>
+                <div style="margin-bottom: 1rem;">
+                    <label style="display: block; margin-bottom: 0.5rem; color: #cbd5e1;">Learning Rate (α): <span id="alphaDisplay" style="color: #f59e0b; font-weight: bold;">0.01</span></label>
+                    <input type="range" id="learningRateSlider" min="0.001" max="0.5" step="0.001" value="0.01" 
+                           style="width: 100%; height: 8px; background: #475569; border-radius: 4px;">
+                    <div style="display: flex; justify-content: space-between; margin-top: 0.5rem; color: #94a3b8; font-size: 0.875rem;">
+                        <span>0.001 (slow)</span>
+                        <span>0.5 (fast)</span>
+                    </div>
+                </div>
+                <div id="learningRate3D" style="height: 600px;"></div>
+            </div>
+            
+            <div class="plot-container">
+                <div id="accuracyCurve" style="height: 400px;"></div>
+            </div>
+            <div class="plot-container">
+                <div id="gradientDescent" style="height: 400px;"></div>
+            </div>
+            <div class="plot-container">
+                <div id="backpropagation" style="height: 400px;"></div>
+            </div>
+            <div class="plot-container">
+                <div id="lossLandscape" style="height: 500px;"></div>
+            </div>
+            <div class="plot-container">
+                <div id="weightEvolution" style="height: 400px;"></div>
+            </div>
+        </div>
+
+        <div id="network" class="tab-content">
+            <!-- Neural Network Visualization -->
+            <div class="plot-container">
+                <h3 style="color: #6366f1; margin-bottom: 1rem; text-align: center;">Neural Network Architecture</h3>
+                <div id="neuralNetwork" style="height: 600px;"></div>
+            </div>
+            
+            <!-- Weight Calculations Display -->
+            <div class="weight-calculations">
+                <h3 style="color: #f59e0b; margin-bottom: 1.5rem; text-align: center;">Weight Matrices & Calculations</h3>
+                <div id="weightDetails" class="weight-details">
+                    <div class="weight-section">
+                        <h4>Model Architecture</h4>
+                        <div id="modelArchitecture" class="weight-info">
+                            <p><strong>Task Type:</strong> <span id="taskType" style="color: #10b981;">Not initialized</span></p>
+                            <p><strong>Target Values:</strong> <span id="targetInfo" style="color: #10b981;">Not initialized</span></p>
+                            <p><strong>Activation Function:</strong> <span id="activationFunction" style="color: #10b981;">Not initialized</span></p>
+                            <p><strong>Learning Rate:</strong> <span id="learningRate" style="color: #10b981;">Not initialized</span></p>
+                        </div>
+                    </div>
+                    
+                    <div class="weight-section">
+                        <h4>Weight Matrices</h4>
+                        <div id="weightMatrices" class="weight-info">
+                            <p><strong>W1 (Input → Hidden):</strong></p>
+                            <div id="w1Matrix" class="matrix-display">Not initialized</div>
+                            
+                            <p><strong>W2 (Hidden → Output):</strong></p>
+                            <div id="w2Matrix" class="matrix-display">Not initialized</div>
+                            
+                            <p><strong>Bias Vectors:</strong></p>
+                            <div id="biasVectors" class="matrix-display">Not initialized</div>
+                        </div>
+                    </div>
+                    
+                    <div class="weight-section">
+                        <h4>Forward Pass Calculation</h4>
+                        <div id="forwardPass" class="weight-info">
+                            <p><strong>Step 1:</strong> z1 = X × W1 + b1</p>
+                            <p><strong>Step 2:</strong> a1 = activation(z1)</p>
+                            <p><strong>Step 3:</strong> z2 = a1 × W2 + b2</p>
+                            <p><strong>Step 4:</strong> a2 = sigmoid(z2) [Output]</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
