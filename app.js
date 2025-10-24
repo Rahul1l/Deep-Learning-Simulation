@@ -82,10 +82,22 @@ class MLP {
     }
     
     matrixAdd(A, B) {
+        // Handle broadcasting when B has fewer rows (bias addition)
+        if (B.length === 1 && A.length > 1) {
+            // Broadcast: add B[0] to every row of A
+            return A.map(row => row.map((val, j) => val + B[0][j]));
+        }
+        // Standard element-wise addition
         return A.map((row, i) => row.map((val, j) => val + B[i][j]));
     }
     
     matrixSubtract(A, B) {
+        // Handle broadcasting when B has fewer rows
+        if (B.length === 1 && A.length > 1) {
+            // Broadcast: subtract B[0] from every row of A
+            return A.map(row => row.map((val, j) => val - B[0][j]));
+        }
+        // Standard element-wise subtraction
         return A.map((row, i) => row.map((val, j) => val - B[i][j]));
     }
     
@@ -143,15 +155,16 @@ class MLP {
     }
     
     sumColumns(matrix) {
+        // Sum each column and return as a 1xN matrix (one row with N columns)
         const sums = [];
         for (let j = 0; j < matrix[0].length; j++) {
             let sum = 0;
             for (let i = 0; i < matrix.length; i++) {
                 sum += matrix[i][j];
             }
-            sums.push([sum]);
+            sums.push(sum);
         }
-        return [sums];
+        return [sums];  // Return as [[sum1, sum2, sum3, ...]]
     }
     
     updateWeights(gradients) {
