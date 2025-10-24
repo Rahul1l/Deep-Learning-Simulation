@@ -2171,10 +2171,10 @@ class DLPlayground {
         try {
             if (!this.state.model) {
                 // Show not initialized message
-                document.getElementById('taskType').textContent = 'Not initialized';
-                document.getElementById('targetInfo').textContent = 'Initialize model first';
-                document.getElementById('activationFunction').textContent = 'Not initialized';
-                document.getElementById('learningRate').textContent = 'Not initialized';
+                document.getElementById('displayTaskType').textContent = 'Not initialized';
+                document.getElementById('displayTargetInfo').textContent = 'Initialize model first';
+                document.getElementById('displayActivationFunction').textContent = 'Not initialized';
+                document.getElementById('displayLearningRate').textContent = 'Not initialized';
                 document.getElementById('w1Matrix').textContent = 'Not initialized - Initialize model to see weights';
                 document.getElementById('w2Matrix').textContent = 'Not initialized - Initialize model to see weights';
                 document.getElementById('biasVectors').textContent = 'Not initialized - Initialize model to see biases';
@@ -2189,10 +2189,10 @@ class DLPlayground {
             const activation = this.state.model.activation.toUpperCase();
             const learningRate = this.state.model.learningRate.toFixed(4);
             
-            document.getElementById('taskType').textContent = taskType;
-            document.getElementById('targetInfo').textContent = targetInfo;
-            document.getElementById('activationFunction').textContent = activation;
-            document.getElementById('learningRate').textContent = learningRate;
+            document.getElementById('displayTaskType').textContent = taskType;
+            document.getElementById('displayTargetInfo').textContent = targetInfo;
+            document.getElementById('displayActivationFunction').textContent = activation;
+            document.getElementById('displayLearningRate').textContent = learningRate;
             
             // Use actual weights from the model
             console.log('Checking model weights...');
